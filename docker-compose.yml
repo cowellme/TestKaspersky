@@ -1,0 +1,39 @@
+# Запуск Web API вместе с PostgreSQL:
+#   docker compose up -d --build
+# Параметры можно переопределить через переменные окружения или файл .env
+# (см. значения по умолчанию ниже).
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-testkaspersky}
+      POSTGRES_USER: ${POSTGRES_USER:-testkaspersky}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-testkaspersky}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: TestKaspersky/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-testkaspersky};Username=${POSTGRES_USER:-testkaspersky};Password=${POSTGRES_PASSWORD:-testkaspersky}"
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
