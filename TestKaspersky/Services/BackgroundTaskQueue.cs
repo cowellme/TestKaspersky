@@ -9,7 +9,7 @@ namespace TestKaspersky.Services
 
         public BackgroundTaskQueue(IConfiguration configuration)
         {
-            _capacity = configuration.GetValue("BackgroundQueue:Capacity", 100);
+            _capacity = configuration.GetValue("BackgroundQueue:Capacity", 500);
             _queue = Channel.CreateBounded<Guid>(new BoundedChannelOptions(_capacity)
             {
                 FullMode = BoundedChannelFullMode.Wait

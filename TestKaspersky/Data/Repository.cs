@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using TestKaspersky.Models;
 
 namespace TestKaspersky.Data
 {
@@ -10,79 +12,56 @@ namespace TestKaspersky.Data
 
         ValueTask<TEntity?> GetByIdAsync(TKey id, CancellationToken cancellationToken = default);
 
-        Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
-
-        Task<bool> ExistsAsync(TKey id, CancellationToken cancellationToken = default);
-
-        Task<int> CountAsync(CancellationToken cancellationToken = default);
-
         Task<TEntity> AddAsync(TEntity entity, CancellationToken cancellationToken = default);
-
-        Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-
-        Task<bool> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default);
+        public Task<bool> UpdateAsync(TEntity entity, CancellationToken ct = default);
 
         Task<bool> DeleteAsync(TKey id, CancellationToken cancellationToken = default);
 
-        Task<bool> DeleteAsync(TEntity entity, CancellationToken cancellationToken = default);
+        Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken ct);
     }
 
-    public class Repository<TEntity, TKey>(AppDbContext dbContext) : IRepository<TEntity, TKey> where TEntity : class where TKey : notnull
+    public class InMemoryRepository<TEntity, TKey> : IRepository<TEntity, TKey>
+        where TEntity : class
+        where TKey : notnull
     {
-        private AppDbContext DbContext { get; } = dbContext;
+        private readonly ConcurrentDictionary<TKey, TEntity> _store = new();
 
-        protected DbSet<TEntity> Set => DbContext.Set<TEntity>();
+        public Task<List<TEntity>> GetAllAsync(CancellationToken ct = default)
+            => Task.FromResult(_store.Values.ToList());
 
-        public virtual Task<List<TEntity>> GetAllAsync(CancellationToken cancellationToken = default)
-            => Set.AsNoTracking().ToListAsync(cancellationToken);
+        public ValueTask<TEntity?> GetByIdAsync(TKey id, CancellationToken ct = default)
+            => new(_store.GetValueOrDefault(id));
 
-        public virtual ValueTask<TEntity?> GetByIdAsync(TKey id, CancellationToken cancellationToken = default)
-            => Set.FindAsync([id], cancellationToken);
-
-        public virtual Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
-            => Set.AsNoTracking().FirstOrDefaultAsync(predicate, cancellationToken);
-
-        public virtual async Task<bool> ExistsAsync(TKey id, CancellationToken cancellationToken = default)
-            => await Set.FindAsync([id], cancellationToken) is not null;
-
-        public virtual Task<int> CountAsync(CancellationToken cancellationToken = default)
-            => Set.CountAsync(cancellationToken);
-
-        public virtual async Task<TEntity> AddAsync(TEntity entity, CancellationToken cancellationToken = default)
+        public Task<TEntity> AddAsync(TEntity entity, CancellationToken ct = default)
         {
-            Set.Add(entity);
-            await DbContext.SaveChangesAsync(cancellationToken);
-            return entity;
+            var key = GetKey(entity);
+            _store[key] = entity;
+            return Task.FromResult(entity);
         }
 
-        public virtual async Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
+        public Task<bool> UpdateAsync(TEntity entity, CancellationToken ct = default)
         {
-            Set.AddRange(entities);
-            await DbContext.SaveChangesAsync(cancellationToken);
+            _store[GetKey(entity)] = entity;
+            return Task.FromResult(true);
         }
 
-        public virtual async Task<bool> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
-        {
-            Set.Update(entity);
-            return await DbContext.SaveChangesAsync(cancellationToken) > 0;
-        }
+        public Task<bool> DeleteAsync(TKey id, CancellationToken ct = default)
+            => Task.FromResult(_store.TryRemove(id, out _));
 
-        public virtual async Task<bool> DeleteAsync(TKey id, CancellationToken cancellationToken = default)
+        public async Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken ct = default)
         {
-            var entity = await Set.FindAsync([id], cancellationToken);
-            if (entity is null)
+            await Task.Run(() =>
             {
-                return false;
-            }
-
-            Set.Remove(entity);
-            return await DbContext.SaveChangesAsync(cancellationToken) > 0;
+                foreach (var entity in entities)
+                {
+                    _store[GetKey(entity)] = entity;
+                }
+            }, ct);
         }
 
-        public virtual async Task<bool> DeleteAsync(TEntity entity, CancellationToken cancellationToken = default)
-        {
-            Set.Remove(entity);
-            return await DbContext.SaveChangesAsync(cancellationToken) > 0;
-        }
+        // остальные методы (GetPaged, Exists, Count, FirstOrDefault) — по аналогии
+        private static TKey GetKey(TEntity entity)
+            => (TKey)(typeof(TEntity).GetProperty("Id")!.GetValue(entity)!);
     }
+
 }

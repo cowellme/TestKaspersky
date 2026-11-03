@@ -7,7 +7,7 @@ namespace TestKaspersky.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class VulnerabilitiesController([FromServices] IVulnerabilityService service) : ControllerBase
+    public class VulnerabilitiesController([FromServices] IVulnerabilityService service, ILogger<VulnerabilitiesController> logger) : ControllerBase
     {
         [HttpGet]
         public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
@@ -19,6 +19,7 @@ namespace TestKaspersky.Controllers
             }
             catch (Exception ex)
             {
+                logger.LogWarning(ex.Message);
                 return BadRequest(ex);
             }
         }
@@ -33,6 +34,7 @@ namespace TestKaspersky.Controllers
             }
             catch (Exception ex)
             {
+                logger.LogWarning("{ExMessage}\n\nGuid: {Guid}", ex.Message, id);
                 return BadRequest(ex);
             }
         }
@@ -59,6 +61,7 @@ namespace TestKaspersky.Controllers
             }
             catch (Exception ex)
             {
+                logger.LogWarning("{ExMessage}\n\nGuid: {Title}", ex.Message, request.Title);
                 return BadRequest(ex);
             }
         }
@@ -73,6 +76,7 @@ namespace TestKaspersky.Controllers
             }
             catch (Exception ex)
             {
+                logger.LogWarning("{ExMessage}\n\nGuid: {Guid}", ex.Message, id);
                 return BadRequest(ex);
             }
         }

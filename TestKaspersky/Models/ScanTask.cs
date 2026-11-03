@@ -2,10 +2,11 @@
 {
     public enum ScanStatus
     {
-        Pending, 
-        InProgress, 
-        Completed, 
-        Failed
+        Queued,
+        InProgress,
+        Completed,
+        Failed,
+        Cancelled
     }
 
     public class ScanTask
@@ -16,6 +17,7 @@
         public DateTime CreatedAt { get; set; }
         public DateTime? StartedAt { get; set; }
         public DateTime? CompletedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public string? ErrorMessage { get; set; }
         public List<Guid> VulnerabilityIds { get; set; } = [];
     }

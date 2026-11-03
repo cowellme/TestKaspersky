@@ -1,76 +1,90 @@
-﻿using System.Net.WebSockets;
-using TestKaspersky.Data;
-using TestKaspersky.Models;
+﻿using TestKaspersky.Models;
 
 namespace TestKaspersky.Services
 {
-    public class ScanWorker(BackgroundTaskQueue queue, IServiceScopeFactory scopeFactory, ILogger<ScanWorker> logger) : BackgroundService
+    public class ScanWorker(
+        BackgroundTaskQueue queue,
+        IScanService scanService,
+        IVulnerabilityService vulnerabilityService, 
+        ICodeScanner scanner,
+        ScanCancellationRegistry cancellations,
+        ILogger<ScanWorker> logger,
+        IConfiguration configuration)
+        : BackgroundService
     {
+        private readonly int _maxParrallelism = configuration.GetValue("Scanning:MaxParallel", 2);
+
         protected override async Task ExecuteAsync(CancellationToken ct)
         {
-            await foreach (var scanId in queue.ReadAllAsync(ct))
+            await Parallel.ForEachAsync(
+            queue.ReadAllAsync(ct),
+            new ParallelOptions
             {
-                await ProcessAsync(scanId, ct);
-            }
+                MaxDegreeOfParallelism = _maxParrallelism,
+                CancellationToken = ct
+            }, async (scanId, ctx) => await ProcessAsync(scanId, ctx));
         }
 
         private async Task ProcessAsync(Guid scanId, CancellationToken ct)
         {
-            using var scope = scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var scanner = scope.ServiceProvider.GetRequiredService<ICodeScanner>();
-            var vulnerabilityService = scope.ServiceProvider.GetRequiredService<IVulnerabilityService>();
+            var task = await scanService.GetById(scanId, ct);
+            if (task is null || task.Status == ScanStatus.Cancelled) return;
 
-            var task = await db.ScanTasks.FindAsync([scanId], ct);
-            if (task is null) return;
+            var token = cancellations.Registry(scanId, ct);
+
 
             try
             {
+                var dateTimeNow = DateTime.UtcNow;
+
                 task.Status = ScanStatus.InProgress;
-                task.StartedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(ct);
+                task.StartedAt = dateTimeNow;
+                task.UpdatedAt = dateTimeNow;
 
-                
-                var found = await scanner.ScanAsync(task.RepositoryUrl, ct);
-                
-                db.Vulnerabilities.AddRange(found);
+                await scanService.UpdateAsync(task, token);
 
-                task.Status = ScanStatus.Completed;
-                task.CompletedAt = DateTime.UtcNow;
+                var found = await scanner.ScanAsync(task, token);
+
+                if (found is { Count: > 0 })
+                {
+                    found.ForEach(v =>
+                    {
+                        var id = Guid.NewGuid();
+                        v.Id = id;
+                        v.ScanTaskId = scanId;
+                        v.CreatedAt = DateTime.UtcNow;
+
+                        task.VulnerabilityIds.Add(id);
+                    });
+                    await vulnerabilityService.AddRange(found, token);
+                }
+
+                if (task.Status != ScanStatus.Cancelled)
+                {
+                    task.Status = token.IsCancellationRequested ? ScanStatus.Cancelled : ScanStatus.Completed;
+                    task.CompletedAt = DateTime.UtcNow;
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested || token.IsCancellationRequested)
+            {
+                task.Status = ScanStatus.Cancelled;
+                task.ErrorMessage = "Отменено";
             }
             catch (Exception ex)
             {
                 task.Status = ScanStatus.Failed;
                 task.ErrorMessage = ex.Message;
-                logger.LogError(ex, "Скан {ScanId} упал", scanId);
+                logger.LogError(ex, "Ошибка скана: {ScanId}", scanId);
             }
-            await db.SaveChangesAsync(ct);
-        }
-    }
-
-    public interface ICodeScanner
-    {
-        Task<List<Vulnerability>> ScanAsync(string url, CancellationToken ct);
-    }
-
-    public class CodeScanner : ICodeScanner
-    {
-        public async Task<List<Vulnerability>> ScanAsync(string url, CancellationToken ct)
-        {
-            var rndCountVulnerability = new Random().Next(1, 10);
-            var listVulnerabilities = new List<Vulnerability>();
-            for (var i = 0; i < rndCountVulnerability; i++)
+            finally
             {
-                await Task.Delay(5000, ct);
-                var rndSeverityLevel = new Random().Next(0, 3);
-                listVulnerabilities.Add(new Vulnerability
-                {
-                    Title = $"test_{i}",
-                    Severity = Enum.GetValues<SeverityLevel>()[rndSeverityLevel],
-                });
+                cancellations.Unregistr(scanId);
             }
 
-            return listVulnerabilities;
+            task.UpdatedAt = DateTime.UtcNow;
+            await scanService.UpdateAsync(task, ct);
         }
     }
+
+
 }
