@@ -361,3 +361,4 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/TestKaspersky/Migrations/20261103074629_AddScanTasks.Designer.cs
