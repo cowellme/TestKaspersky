@@ -4,11 +4,11 @@ namespace TestKaspersky.Services;
 
 public interface ICodeScanner
 {
-    Task<List<Vulnerability>?> ScanAsync(ScanTask task, CancellationToken ct);
+    Task<List<Vulnerability>?> ScanAsync(ScanTask task, CancellationToken ct, int delay = 3000);
 }
 public class CodeScanner(ILogger<CodeScanner> logger) : ICodeScanner
 {
-    public async Task<List<Vulnerability>?> ScanAsync(ScanTask task, CancellationToken ct)
+    public async Task<List<Vulnerability>?> ScanAsync(ScanTask task, CancellationToken ct, int delay = 3000)
     {
         logger.LogInformation("Старт сканирования");
 
@@ -20,7 +20,7 @@ public class CodeScanner(ILogger<CodeScanner> logger) : ICodeScanner
             ct.ThrowIfCancellationRequested();
 
             logger.LogInformation("Найдена уязвимость по ссылке: {Url}!", task.RepositoryUrl);
-            await Task.Delay(5000, ct);
+            await Task.Delay(delay, ct);
             var rndSeverityLevel = new Random().Next(0, 3);
             list.Add(new Vulnerability
             {
