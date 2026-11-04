@@ -26,13 +26,22 @@ namespace TestKaspersky.Controllers
         [HttpGet("{id:guid}")]
         public async Task<ActionResult<ScanTask>> GetById(Guid id, CancellationToken ct)
         {
-            var task = await service.GetById(id, ct);
-            if (task is null)
+            try
             {
-                logger.LogWarning("Задача {ScanId} не найдена", id);
-                return NotFound();
+                var task = await service.GetById(id, ct);
+                if (task is null)
+                {
+                    logger.LogWarning("Задача {ScanId} не найдена", id);
+                    return NotFound();
+                }
+
+                return Ok(task);
             }
-            return Ok(task);
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex.Message);
+                return BadRequest(ex);
+            }
         }
 
         [HttpPost]
@@ -62,15 +71,23 @@ namespace TestKaspersky.Controllers
         [HttpPost("{id:guid}/cancel")]
         public async Task<ActionResult<CancelScanResponse>> Cancel(Guid id, CancellationToken ct)
         {
-            var result = await service.CancelScan(id, ct);
-            if (result is null)
+            try
             {
-                logger.LogWarning("Отмена: задача {ScanId} не найдена", id);
-                return NotFound();
-            }
+                var result = await service.CancelScan(id, ct);
+                if (result is null)
+                {
+                    logger.LogWarning("Отмена: задача {ScanId} не найдена", id);
+                    return NotFound();
+                }
 
-            logger.LogInformation("Отмена задачи {ScanId}: {Success}", id, result.Success);
-            return Ok(result);
+                logger.LogInformation("Отмена задачи {ScanId}: {Success}", id, result.Success);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex.Message);
+                return BadRequest(ex);
+            }
         }
     }
 }

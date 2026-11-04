@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="TestKaspersky.Tests/TestKaspersky.Tests.csproj" />
   <Project Path="TestKaspersky/TestKaspersky.csproj" />
 </Solution>
