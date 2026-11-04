@@ -8,6 +8,10 @@ namespace TestKaspersky.Controllers
     [Route("api/[controller]")]
     public class ScanController([FromServices] IScanService service, ILogger<ScanController> logger) : ControllerBase
     {
+        /// <summary>
+        /// Получение всех сохраненных задач.
+        /// </summary>
+        /// <response code="200">Задачи, статусы и метаданные.</response>
         [HttpGet]
         public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
         {
@@ -23,6 +27,12 @@ namespace TestKaspersky.Controllers
             }
         }
 
+        /// <summary>
+        /// Возвращает текущий статус задачи.
+        /// </summary>
+        /// <param name="id">Идентификатор задачи.</param>
+        /// <response code="200">Задача, статус и метаданные.</response>
+        /// <response code="404">Задчи не существует.</response>
         [HttpGet("{id:guid}")]
         public async Task<ActionResult<ScanTask>> GetById(Guid id, CancellationToken ct)
         {
@@ -44,6 +54,14 @@ namespace TestKaspersky.Controllers
             }
         }
 
+        /// <summary>
+        /// Запускает фоновую задачу сканирования по ссылке (мок сервис) на уязвимости.
+        /// </summary>
+        /// <param name="url">Ссылка.</param>
+        /// <param name="cancellationToken">Токен отмены запроса.</param>
+        /// <response code="200">Идентификатор задачи.</response>
+        /// <response code="404">Задача не создана.</response>
+        /// <response code="400">Некорректный запрос.</response>
         [HttpPost]
         public async Task<IActionResult> ScanUrl(string url, CancellationToken cancellationToken)
         {
@@ -68,6 +86,12 @@ namespace TestKaspersky.Controllers
             }
         }
 
+        /// <summary>
+        /// Отменяет задачу в очереди или уже выполняющуюся.
+        /// </summary>
+        /// <param name="id">Идентификатор задачи.</param>
+        /// <response code="200">Результат отмены: идентификатор, время и успешность.</response>
+        /// <response code="404">Задача не найдена.</response>
         [HttpPost("{id:guid}/cancel")]
         public async Task<ActionResult<CancelScanResponse>> Cancel(Guid id, CancellationToken ct)
         {
