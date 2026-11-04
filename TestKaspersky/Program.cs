@@ -1,5 +1,7 @@
+using System.Reflection;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 using TestKaspersky.Data;
 using TestKaspersky.Services;
 
@@ -27,7 +29,19 @@ namespace TestKaspersky
 
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+            builder.Services.AddSwaggerGen(options =>
+            {
+                options.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Title = "Vulnerability Tracker API",
+                    Version = "v1",
+                    Description = "Сервис управления уязвимостями ПО: CRUD уязвимостей " +
+                                  "и асинхронные задачи сканирования репозиториев."
+                });
+
+                var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+                options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFile));
+            });
 
             builder.Services.AddSingleton(typeof(IRepository<,>), typeof(InMemoryRepository<,>));
             builder.Services.AddSingleton<IVulnerabilityService, VulnerabilityService>(); 
@@ -43,12 +57,10 @@ namespace TestKaspersky
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
-                
+                app.UseSwagger();
+                app.UseSwaggerUI();
             }
             
-            
-            app.UseSwagger();
-            app.UseSwaggerUI();
 
             app.UseAuthorization();
 
